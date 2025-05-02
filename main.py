@@ -16,15 +16,21 @@ pygame.display.set_caption('Dizzy Dory')
 bg_scroll = 0
 scroll_speed = 4
 obstacle_velocity = 4
-obstacle_width = 70
+obstacle_width = 100
 obstacle_gap = 180
 obstacle_frequency = 1500
 last_obstacle_time = pygame.time.get_ticks()
 obstacles = []
+score = 0
+high_score = 0
 
 # Load background
-bg = pygame.image.load('bg.png').convert()
+bg = pygame.image.load('img/bg.png').convert()
 bg = pygame.transform.scale(bg, (screen_width, screen_height))
+
+# Obstacle image
+pipe_img = pygame.image.load('img/pipe.png').convert_alpha()
+pipe_img = pygame.transform.scale(pipe_img, (obstacle_width, screen_height * 2))
 
 # Fonts
 font_large = pygame.font.SysFont('comicsans', 60)
@@ -43,7 +49,7 @@ class Fish(pygame.sprite.Sprite):
         self.index = 0
         self.counter = 0
         for num in range(1, 4):
-            img = pygame.image.load(f'fish{num}.png').convert_alpha()
+            img = pygame.image.load(f'img/fish{num}.png').convert_alpha()
             img = pygame.transform.scale(img, (60, 45))
             self.images.append(img)
         self.image = self.images[self.index]
@@ -68,12 +74,16 @@ class Fish(pygame.sprite.Sprite):
             self.rect.top = 0
             self.velocity = 0
 
-# Obstacle creation
+# Obstacle creation with images
 def create_obstacle():
     height = random.randint(100, screen_height - obstacle_gap - 100)
     top_rect = pygame.Rect(screen_width, 0, obstacle_width, height)
     bottom_rect = pygame.Rect(screen_width, height + obstacle_gap, obstacle_width, screen_height - height - obstacle_gap)
-    return (top_rect, bottom_rect)
+
+    top_pipe_img = pygame.transform.flip(pipe_img.subsurface((0, pipe_img.get_height() - height, obstacle_width, height)), False, True)
+    bottom_pipe_img = pipe_img.subsurface((0, 0, obstacle_width, screen_height - height - obstacle_gap))
+
+    return (top_rect, bottom_rect, top_pipe_img, bottom_pipe_img, False)  # False = not passed yet
 
 # Button drawing
 def draw_button(text, x, y, w, h, color):
@@ -105,7 +115,6 @@ show_start_screen = True
 run = True
 while run:
     clock.tick(fps)
-
     screen.blit(bg, (0, 0))
     screen.blit(bg, (bg_scroll + screen_width, 0))
 
@@ -131,6 +140,7 @@ while run:
                 obstacles.clear()
                 flappy.rect.center = [100, screen_height // 2]
                 flappy.velocity = 0
+                score = 0
                 show_countdown()
             if exit_button.collidepoint((mx, my)):
                 run = False
@@ -139,8 +149,8 @@ while run:
         title_text = font_large.render("Dizzy Dory", True, WHITE)
         screen.blit(title_text, (screen_width//2 - title_text.get_width()//2, 150))
         start_button = draw_button("Start Game", 175, 250, 150, 50, (0, 128, 255))
+
     elif not game_over:
-        # Gameplay
         fish_group.update()
         fish_group.draw(screen)
 
@@ -149,22 +159,42 @@ while run:
             obstacles.append(create_obstacle())
             last_obstacle_time = current_time
 
-        for top_rect, bottom_rect in obstacles:
+        for i in range(len(obstacles)):
+            top_rect, bottom_rect, top_img, bottom_img, passed = obstacles[i]
             top_rect.x -= obstacle_velocity
             bottom_rect.x -= obstacle_velocity
-            pygame.draw.rect(screen, GREEN, top_rect)
-            pygame.draw.rect(screen, GREEN, bottom_rect)
+            screen.blit(top_img, top_rect)
+            screen.blit(bottom_img, bottom_rect)
 
-        obstacles = [pair for pair in obstacles if pair[0].x > -obstacle_width]
+            # Scoring logic
+            if not passed and top_rect.right < flappy.rect.left:
+                score += 1
+                obstacles[i] = (top_rect, bottom_rect, top_img, bottom_img, True)
 
-        for top_rect, bottom_rect in obstacles:
+        obstacles = [obs for obs in obstacles if obs[0].x > -obstacle_width]
+
+        for top_rect, bottom_rect, _, _, _ in obstacles:
             if flappy.rect.colliderect(top_rect) or flappy.rect.colliderect(bottom_rect):
                 game_over = True
+                if score > high_score:
+                    high_score = score
+
+        # Score display
+        score_text = font_small.render(f"Score: {score}", True, WHITE)
+        high_score_text = font_small.render(f"High Score: {high_score}", True, WHITE)
+        screen.blit(score_text, (10, 10))
+        screen.blit(high_score_text, (10, 40))
 
     else:
         # Game Over screen
         game_over_text = font_large.render("Game Over", True, RED)
         screen.blit(game_over_text, (screen_width//2 - game_over_text.get_width()//2, 150))
+
+        # Display score & high score here too
+        score_text = font_small.render(f"Score: {score}", True, WHITE)
+        high_score_text = font_small.render(f"High Score: {high_score}", True, WHITE)
+        screen.blit(score_text, (10, 10))
+        screen.blit(high_score_text, (10, 40))
 
         restart_button = draw_button("Restart", 150, 250, 100, 40, (0, 128, 0))
         exit_button = draw_button("Exit", 270, 250, 80, 40, (128, 0, 0))
