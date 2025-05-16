@@ -1,6 +1,8 @@
 import pygame
 import sys
 import random
+import numpy as np
+from tensorflow.keras.models import load_model
 
 pygame.init()
 clock = pygame.time.Clock()
@@ -17,20 +19,24 @@ bg_scroll = 0
 scroll_speed = 4
 obstacle_velocity = 4
 obstacle_width = 100
-obstacle_gap = 180
-obstacle_frequency = 1500
+obstacle_gap = 200
+obstacle_frequency = 3000
 last_obstacle_time = pygame.time.get_ticks()
 obstacles = []
 score = 0
 high_score = 0
 
 # Load background
-bg = pygame.image.load('img/bg.png').convert()
+bg = pygame.image.load('bg.png').convert()
 bg = pygame.transform.scale(bg, (screen_width, screen_height))
 
 # Obstacle image
-pipe_img = pygame.image.load('img/pipe.png').convert_alpha()
+pipe_img = pygame.image.load('pipe.png').convert_alpha()
 pipe_img = pygame.transform.scale(pipe_img, (obstacle_width, screen_height * 2))
+
+# Load arrow image for AI suggestion
+arrow_img = pygame.image.load('arrow.png').convert_alpha()
+arrow_img = pygame.transform.scale(arrow_img, (30, 30))
 
 # Fonts
 font_large = pygame.font.SysFont('comicsans', 60)
@@ -41,6 +47,9 @@ GREEN = (0, 255, 0)
 RED = (255, 0, 0)
 WHITE = (255, 255, 255)
 
+# Load trained AI model
+model = load_model("dizzy_dory_dqn_model.h5", compile=False)
+
 # Fish class
 class Fish(pygame.sprite.Sprite):
     def __init__(self, x, y):
@@ -49,7 +58,7 @@ class Fish(pygame.sprite.Sprite):
         self.index = 0
         self.counter = 0
         for num in range(1, 4):
-            img = pygame.image.load(f'img/fish{num}.png').convert_alpha()
+            img = pygame.image.load(f'fish{num}.png').convert_alpha()
             img = pygame.transform.scale(img, (60, 45))
             self.images.append(img)
         self.image = self.images[self.index]
@@ -83,7 +92,24 @@ def create_obstacle():
     top_pipe_img = pygame.transform.flip(pipe_img.subsurface((0, pipe_img.get_height() - height, obstacle_width, height)), False, True)
     bottom_pipe_img = pipe_img.subsurface((0, 0, obstacle_width, screen_height - height - obstacle_gap))
 
-    return (top_rect, bottom_rect, top_pipe_img, bottom_pipe_img, False)  # False = not passed yet
+    return (top_rect, bottom_rect, top_pipe_img, bottom_pipe_img, False)
+
+# AI Flap Suggestion Function
+def get_ai_flap_suggestion(fish, obstacles):
+    if not obstacles:
+        return False
+
+    top_rect, bottom_rect, _, _, _ = obstacles[0]
+    fish_y_normalized = fish.rect.centery / screen_height
+    velocity_normalized = fish.velocity / 10.0
+    horizontal_distance = (top_rect.x - fish.rect.left) / screen_width
+    gap_center_y = top_rect.height + (obstacle_gap / 2)
+    vertical_distance = (gap_center_y - fish.rect.centery) / screen_height
+
+    state = np.array([[fish_y_normalized, velocity_normalized, horizontal_distance, vertical_distance]], dtype=np.float32)
+    q_values = model.predict(state, verbose=0)
+
+    return q_values[0][1] > q_values[0][0]
 
 # Button drawing
 def draw_button(text, x, y, w, h, color):
@@ -166,7 +192,6 @@ while run:
             screen.blit(top_img, top_rect)
             screen.blit(bottom_img, bottom_rect)
 
-            # Scoring logic
             if not passed and top_rect.right < flappy.rect.left:
                 score += 1
                 obstacles[i] = (top_rect, bottom_rect, top_img, bottom_img, True)
@@ -179,6 +204,12 @@ while run:
                 if score > high_score:
                     high_score = score
 
+        # Show AI suggestion
+        if get_ai_flap_suggestion(flappy, obstacles):
+            arrow_x = flappy.rect.centerx + 30
+            arrow_y = flappy.rect.centery - 20
+            screen.blit(arrow_img, (arrow_x, arrow_y))
+
         # Score display
         score_text = font_small.render(f"Score: {score}", True, WHITE)
         high_score_text = font_small.render(f"High Score: {high_score}", True, WHITE)
@@ -186,11 +217,9 @@ while run:
         screen.blit(high_score_text, (10, 40))
 
     else:
-        # Game Over screen
         game_over_text = font_large.render("Game Over", True, RED)
         screen.blit(game_over_text, (screen_width//2 - game_over_text.get_width()//2, 150))
 
-        # Display score & high score here too
         score_text = font_small.render(f"Score: {score}", True, WHITE)
         high_score_text = font_small.render(f"High Score: {high_score}", True, WHITE)
         screen.blit(score_text, (10, 10))
