@@ -1,3 +1,4 @@
+#main code for dizzy dory
 import pygame
 import sys
 import random
