@@ -20,4 +20,10 @@ If Dory collides with a pipe or touches the screen’s top/bottom, it's **game o
 Each time Dory successfully passes a pair of obstacles, the **score increases by 1**.
 The game keeps track of the **high score** during the session.
 
+AI Flap Suggestion Assistant
+
+Integrates a trained Deep Q-Network model into Dizzy Dory to suggest optimal flap timings. The AI predicts actions based on fish position, velocity, and obstacle distance, displaying a visual cue (arrow) when flapping is recommended. Enhances gameplay by providing real-time, data-driven flap hints alongside manual controls.
+
+
+
 
